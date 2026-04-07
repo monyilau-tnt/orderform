@@ -9,29 +9,69 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, sans-serif; background: #f5f5f5; padding: 20px; }
     .card { background: white; border-radius: 16px; padding: 24px; max-width: 480px; margin: 0 auto; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
-    h2 { color: #06C755; margin-bottom: 20px; font-size: 20px; }
+    h2 { color: #06C755; margin-bottom: 8px; font-size: 20px; }
+    .subtitle { color: #888; font-size: 13px; margin-bottom: 20px; }
     label { display: block; font-size: 14px; color: #555; margin-bottom: 6px; margin-top: 16px; }
+    label span { color: red; margin-left: 2px; }
     input, select, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; font-size: 15px; }
     textarea { height: 80px; resize: none; }
     button { width: 100%; margin-top: 24px; padding: 14px; background: #06C755; color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; }
     button:disabled { background: #aaa; }
     #msg { margin-top: 16px; text-align: center; font-size: 14px; }
+
+    /* 防呆彈窗 */
+    .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 999; }
+    .dialog { background: white; border-radius: 16px; padding: 28px 24px; max-width: 320px; width: 90%; text-align: center; }
+    .dialog h3 { font-size: 17px; color: #333; margin-bottom: 12px; line-height: 1.5; }
+    .dialog p { font-size: 14px; color: #666; margin-bottom: 20px; line-height: 1.6; }
+    .dialog-btns { display: flex; gap: 10px; }
+    .btn-yes { flex: 1; padding: 12px; background: #06C755; color: white; border: none; border-radius: 10px; font-size: 15px; font-weight: bold; cursor: pointer; }
+    .btn-no { flex: 1; padding: 12px; background: #f0f0f0; color: #555; border: none; border-radius: 10px; font-size: 15px; cursor: pointer; }
+    .reject-msg { display: none; }
+    .reject-msg p { color: #e74c3c; font-size: 14px; line-height: 1.7; margin-top: 8px; }
   </style>
 </head>
 <body>
+
+<!-- 防呆彈窗 -->
+<div class="overlay" id="overlay">
+  <div class="dialog">
+    <h3>⚠️ 請先確認</h3>
+    <p>請問你已經跟店主談好<br>要採購／下單了嗎？</p>
+    <div class="dialog-btns" id="dialogBtns">
+      <button class="btn-no" onclick="rejectUser()">還沒</button>
+      <button class="btn-yes" onclick="allowUser()">是的！</button>
+    </div>
+    <div class="reject-msg" id="rejectMsg">
+      <p>不好意思，此表格僅提供給已談好產品與價錢的客人使用 🙏<br><br>請先透過 IG 或 LINE 與我們聯絡，談好後再填寫表單，謝謝！</p>
+    </div>
+  </div>
+</div>
+
+<!-- 表單 -->
 <div class="card">
   <h2>✅ 確認下單</h2>
-  <label>你的姓名</label>
+  <p class="subtitle">請填寫以下資料，送出後我們會盡快確認 🙏</p>
+
+  <label>你的姓名 <span>*</span></label>
   <input type="text" id="name" placeholder="請輸入姓名">
-  <label>商品描述</label>
+
+  <label>IG 帳號 <span>*</span></label>
+  <input type="text" id="ig" placeholder="例如：@fancraftlab">
+
+  <label>商品描述 <span>*</span></label>
   <textarea id="product" placeholder="品牌、型號、顏色等"></textarea>
-  <label>報價金額（NT$）</label>
-  <input type="number" id="price" placeholder="由店家告知後填入">
-  <label>取貨方式</label>
+
+  <label>報價金額（NT$）<span>*</span></label>
+  <input type="number" id="price" placeholder="請填入與店主確認的金額">
+
+  <label>取貨方式 <span>*</span></label>
   <select id="delivery">
+    <option value="">請選擇</option>
     <option value="店取">店取</option>
     <option value="宅配">宅配</option>
   </select>
+
   <button id="submitBtn" onclick="submitForm()">送出訂單</button>
   <p id="msg"></p>
 </div>
@@ -42,29 +82,34 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbwCRllxj_mfDvZmJxekWWJg
 
 let userId = '';
 
+function allowUser() {
+  document.getElementById('overlay').style.display = 'none';
+}
+
+function rejectUser() {
+  document.getElementById('dialogBtns').style.display = 'none';
+  document.getElementById('rejectMsg').style.display = 'block';
+}
+
 async function initLiff() {
   try {
     await liff.init({ liffId: LIFF_ID });
-    if (!liff.isLoggedIn()) {
-      liff.login();
-      return;
-    }
+    if (!liff.isLoggedIn()) { liff.login(); return; }
     const profile = await liff.getProfile();
     userId = profile.userId;
     document.getElementById('name').value = profile.displayName;
-  } catch(e) {
-    console.error('LIFF error:', e);
-  }
+  } catch(e) { console.error('LIFF error:', e); }
 }
 
 async function submitForm() {
   const name = document.getElementById('name').value.trim();
+  const ig = document.getElementById('ig').value.trim();
   const product = document.getElementById('product').value.trim();
   const price = document.getElementById('price').value.trim();
   const delivery = document.getElementById('delivery').value;
 
-  if (!name || !product) {
-    alert('請填寫姓名和商品描述');
+  if (!name || !ig || !product || !price || !delivery) {
+    alert('請填寫所有必填欄位（標有 * 的都要填）');
     return;
   }
 
@@ -79,13 +124,11 @@ async function submitForm() {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ name, userId, product, price, delivery })
+      body: JSON.stringify({ name, ig, userId, product, price, delivery })
     });
     msg.style.color = '#06C755';
     msg.textContent = '✅ 訂單已送出！我們會盡快與你確認。';
-    setTimeout(() => {
-      if (liff.isInClient()) liff.closeWindow();
-    }, 2000);
+    setTimeout(() => { if (liff.isInClient()) liff.closeWindow(); }, 2000);
   } catch(e) {
     msg.style.color = 'red';
     msg.textContent = '❌ 送出失敗，請重試。';
